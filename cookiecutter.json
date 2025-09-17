@@ -1,0 +1,8 @@
+{
+  "project_name": "kimlab_datalogging",
+  "github_username_or_orgname": "iblg",
+  "github_repo_name": "kimlab_datalogging",
+  "conda_pypi_package_dist_name": "kimlab_datalogging",
+  "package_dir_name": "kimlab_datalogging",
+  "contributors": "Ian Billinge"
+}
