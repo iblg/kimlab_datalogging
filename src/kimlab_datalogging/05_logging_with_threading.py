@@ -69,8 +69,8 @@ def set_cjc_slope_offset(tc_type):
         print('Since thermocouple is not type K, I don\'t know what cjc slope and offset to set')
         return
 
-def set_resolution_index_registers(handle, channel_names, channels):
-    for channel_name, channel in zip(channel_names, channels):
+def set_resolution_index_registers(handle, channel_names, thermocouple_channels):
+    for channel_name, channel in zip(channel_names, thermocouple_channels):
         resolution_index_register = "{}_RESOLUTION_INDEX".format(channel_name)
         ljm.eWriteName(handle, resolution_index_register, channel)
     return
@@ -117,19 +117,22 @@ def set_time_interval_between_readings(interval_handle, seconds_between_readings
     ljm.startInterval(interval_handle, microseconds_between_readings)
     return
 
-def create_axes(temp_unit):
-    fig, ax = plt.subplots()
+def create_axes(temp_unit, flow_unit):
+    fig, ax = plt.subplots(nrows=2, sharex=True)
     plt.title('Thermocouple Temperature Over Time')
-    plt.xlabel('Time')
-    plt.ylabel(f'Temperature ({temp_unit})')
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    ax[1].set_xlabel('Time')
+    ax[0].set_ylabel(f'Temperature ({temp_unit})')
+    ax[1].set_ylabel(f'Flow rate ({flow_unit})')
+    ax[1].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     return fig, ax
 
 
 def read_and_log_thermocouples(
-        channels=[0],
+        thermocouple_channels=[0],
+        flow_channels=[2],
         tc_type: str = 'k',
         temp_unit: str = 'C',
+        flow_unit: str = 'mL/min',
         seconds_between_readings: float = 1.0,
         print_output_flag: bool = True,
         save_to: bool | Path = False,
@@ -143,7 +146,7 @@ def read_and_log_thermocouples(
 
     temp_unit_index = get_temp_unit_index(temp_unit)
 
-    channel_names = [create_analog_channel(channel) for channel in channels]
+    channel_names = [create_analog_channel(channel) for channel in thermocouple_channels]
     plot_channel_names = [name for name in channel_names if name not in exclude_channels_from_plot]
 
     neg_channel_values = []
@@ -153,10 +156,10 @@ def read_and_log_thermocouples(
         neg_channel_values.append(ncv)
         neg_channel_registers.append(ncr)
     
-    cjc_addresses = [get_cjc_address(device_type, channel) for channel in channels]
+    cjc_addresses = [get_cjc_address(device_type, channel) for channel in thermocouple_channels]
 
 
-    set_resolution_index_registers(handle, channel_names, channels)
+    set_resolution_index_registers(handle, channel_names, thermocouple_channels)
     configure_ain_ef_registers(handle, channel_names, tc_index, temp_unit_index, cjc_addresses, cjc_slope, cjc_offset)
     interval_handle = 1
     set_time_interval_between_readings(interval_handle, seconds_between_readings)
@@ -182,10 +185,10 @@ def read_and_log_thermocouples(
     save_time_format = "%Y_%m_%d_%H_%M_%S"
     formatted_start_time = datetime.strftime(start_time, save_time_format)
 
-    fig, ax = create_axes(temp_unit)
+    fig, ax = create_axes(temp_unit, flow_unit)
     
-    lines = {channel_name: ax.plot([], [], '.', label=f'Thermocouple {channel_name}')[0] for channel_name in plot_channel_names}
-    thermocouple_index = [3*i for i in range(len(channels))]
+    lines = {channel_name: ax[0].plot([], [], '.', label=f'Thermocouple {channel_name}')[0] for channel_name in plot_channel_names}
+    thermocouple_index = [3*i for i in range(len(thermocouple_channels))]
 
     def animate(i):
         current_time = datetime.now()
@@ -215,9 +218,9 @@ def read_and_log_thermocouples(
         for channel_name in plot_channel_names:
             lines[channel_name].set_data(times, thermocouple_temps[channel_name])
 
-        ax.relim()
-        ax.autoscale_view()
-        plt.legend()
+        [axis.relim() for axis in ax]
+        [axis.autoscale_view() for axis in ax]
+        [axis.legend() for axis in ax]
 
         if print_output_flag:
             print(data_entry)
@@ -261,12 +264,14 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples([2], seconds_between_readings=1, 
+    read_and_log_thermocouples(thermocouple_channels=[0, 1, 3], 
+                               flow_channels=[2],
+                               seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[])
     
-    
+
     return
 
 if __name__ == '__main__':
