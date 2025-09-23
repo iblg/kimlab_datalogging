@@ -261,7 +261,7 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples([0,2], seconds_between_readings=1, 
+    read_and_log_thermocouples([2], seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[])
