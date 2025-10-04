@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 
 
 def get_rows_with_messages(data):
@@ -7,9 +8,11 @@ def get_rows_with_messages(data):
     return rwm
 
 
-def read_log_files_from_parent_dir(parent_dir: Path,
-                                   exclude_files_with_substrings=None,
-                                   rglob=False) -> pd.DataFrame:
+def read_log_files_from_parent_dir(
+        parent_dir: Path,
+        exclude_files_with_substrings=None,
+        rglob=False,
+        time_format: str = '%Y/%m/%d, %H:%M:%S.%f') -> pd.DataFrame:
     if rglob:
         files = list(parent_dir.rglob("*.csv"))
     else:
@@ -23,7 +26,15 @@ def read_log_files_from_parent_dir(parent_dir: Path,
 
     data = [read_log_file(file) for file in files]
     data = pd.concat(data, axis='rows')
-    data = data.sort_values('time').reset_index()
+
+    data['time'] = pd.to_datetime(data['time'], format=time_format)
+    data = data.sort_values('time')
+    data = data.reset_index()
+
+    data['dt'] = data['time'] - data['time'].min()
+    data['dt'] = data['dt'].dt.total_seconds()
+    # Note: the data.dt has nothing to do with the 'dt' column.
+    # Just a coincidence of Pandas's notation.
     return data
 
 
@@ -34,7 +45,7 @@ def read_log_file(log_file_path):
 
 def verboseprint(df, max_rows=None, max_cols=None, cols=None):
     with pd.option_context('display.max_rows', max_rows,
-                           'display.max_columns',max_cols
+                           'display.max_columns', max_cols
                            ):
         if cols is None:
             print(df)
@@ -50,8 +61,7 @@ def main():
     # print(data)
 
     rwm = get_rows_with_messages(data)
-    verboseprint(rwm, cols=['message',
-                            'time'])
+    verboseprint(rwm, max_rows=100, cols=['message', 'time', 'dt'])
     return
 
 
