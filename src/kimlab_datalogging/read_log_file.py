@@ -12,7 +12,8 @@ def read_log_files_from_parent_dir(
         parent_dir: Path,
         exclude_files_with_substrings=None,
         rglob=False,
-        time_format: str = '%Y/%m/%d, %H:%M:%S.%f') -> pd.DataFrame:
+        time_format: str = '%Y/%m/%d, %H:%M:%S.%f',
+        save_to_path: Path = None) -> pd.DataFrame:
     if rglob:
         files = list(parent_dir.rglob("*.csv"))
     else:
@@ -35,6 +36,12 @@ def read_log_files_from_parent_dir(
     data['dt'] = data['dt'].dt.total_seconds()
     # Note: the data.dt has nothing to do with the 'dt' column.
     # Just a coincidence of Pandas's notation.
+    if save_to_path is None:
+        pass
+    else:
+        save_to_path.parent.mkdir(parents=True, exist_ok=True)
+        data.to_csv(save_to_path, index=False)
+
     return data
 
 
@@ -55,11 +62,13 @@ def verboseprint(df, max_rows=None, max_cols=None, cols=None):
 
 def main():
     p = ('/Users/ianbillinge/Documents/kimlab/projects/vuv/xanthydrol/'
-         'measurements/2025_10_02/lab_nb')
+         'measurements/2025_10_02/lab_nb/from_import')
     path = Path(p)
-    data = read_log_files_from_parent_dir(parent_dir=path, rglob=True)
+    path_out = path.parent / 'data' / '2025_10_02_lab_nb.csv'
+    data = read_log_files_from_parent_dir(parent_dir=path, rglob=True,
+                                          save_to_path=path_out)
     # print(data)
-
+    print(path_out)
     rwm = get_rows_with_messages(data)
     verboseprint(rwm, max_rows=100, cols=['message', 'time', 'dt'])
     return
