@@ -264,8 +264,8 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples(thermocouple_channels=[0, 1, 3], 
-                               flow_channels=[2],
+    read_and_log_thermocouples(thermocouple_channels=[0, 2], 
+                               flow_channels=[3],
                                seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
                                message_queue=message_queue, 
