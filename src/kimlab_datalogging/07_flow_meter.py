@@ -9,7 +9,18 @@ from matplotlib.animation import FuncAnimation
 import threading
 import queue
 import serial
-from orionstar_utils import get_ph_measurement_from_orionstar
+from orionstar_utils import get_reading_from_versastar
+
+def flowmeter_calib_2026_04_06():
+    # uses 2026_04_06 calibration of serial number 01842 McMillan 112 flowmeter
+    slope = 20.0744
+    int = 1.8462
+
+    return int, slope
+
+def convert_volts_to_flow(V):
+    int, slope = flowmeter_calib_2026_04_06()
+    return int + slope * V
 
 def set_time_interval_between_readings(interval_handle, seconds_between_readings):
     microseconds_between_readings = int(seconds_between_readings*10**6)
@@ -19,7 +30,7 @@ def set_time_interval_between_readings(interval_handle, seconds_between_readings
 def create_axes(temp_unit, flow_unit, DO_unit):
     fig, ax = plt.subplots(nrows=3, sharex=True)
     # plt.title('Thermocouple Temperature Over Time')
-    ax[1].set_xlabel('Time')
+    ax[-1].set_xlabel('Time')
     ax[0].set_ylabel(f'Temperature ({temp_unit})')
     ax[1].set_ylabel(f'Flow rate ({flow_unit})')
     ax[2].set_ylabel(f'pH ({DO_unit})') #### CURRENTLY ASSUMES IN MG/L
@@ -40,6 +51,8 @@ def read_and_log_thermocouples(
         message_queue=None,
         exclude_channels_from_plot=[],
         ):
+    
+
     
     handle, device_type = lu.get_labjack_handle()
     tc_index = lu.set_tc_index(tc_type)
@@ -85,6 +98,7 @@ def read_and_log_thermocouples(
     labels_flattened.append('dt')
     labels_flattened.append('message')
     labels_flattened.append('DO')
+    labels_flattened.append('flow rate voltage')
 
     times = []
     thermocouple_temps = {cn: [] for cn in channel_names}
@@ -95,36 +109,58 @@ def read_and_log_thermocouples(
     save_time_format = "%Y_%m_%d_%H_%M_%S"
     formatted_start_time = datetime.strftime(start_time, save_time_format)
 
+    data_df = pd.DataFrame()
+
+    # prep_to_save
+    if save_to is False:
+        pass
+    elif save_to.is_dir():
+        save_to.mkdir(exist_ok=True)
+        save_to = save_to / (formatted_start_time + '.csv')
+        data_df.to_csv(save_to, index=False)
+    else:
+        save_to.parent.mkdir(exist_ok=True)
+        data_df.to_csv(save_to, index=False)
+
     fig, ax = create_axes(temp_unit, flow_unit, DO_unit)
     
     lines = {channel_name: ax[0].plot([], [], '.', label=f'Thermocouple {channel_name}')[0] for channel_name in plot_channel_names}
-    lines['pH'] = ax[2].plot([],[], '.', label='pH')[0]
+    # lines['pH'] = ax[2].plot([],[], '.', label='pH')[0]
+    lines['DO'] = ax[2].plot([],[], '.', label='DO')[0]
     lines['flow_rate'] = ax[1].plot([],[], '.', label='flow rate')[0]
-    print(lines)
+
     thermocouple_index = [3*i for i in range(len(thermocouple_channels))]
+    flowmeter_index = -2 # to avoid problems, the flowmeter should be attached to the labjack at the highest analog input position
+
     pH_list = []
     flow_rate_list = []
+    DO_list = []
 
     def animate(i):
         current_time = datetime.now()
         formatted_time = datetime.strftime(current_time, time_format)
         dt = (current_time - start_time).total_seconds()
         
-        # gather data
+
         data_in = ljm.eReadNames(handle, len(abcs_flattened), abcs_flattened)
+        flow_rate_voltage = ljm.eReadName(handle, 'ain3')
+        flow_rate = convert_volts_to_flow(float(flow_rate_voltage))
         temperatures = [data_in[idx] for idx in thermocouple_index]
-        pH = get_ph_measurement_from_orionstar(orionstar, orionstar_prompt)
-        pH_list.append(pH)
-        # flow_rate_list.append(data_in[-3]) # BAD PROGRAMMING THIS LINE
-        # print("Data read from LabJack:", data_in)  # Debugging line
-        # print("Temperatures:", temperatures)  # Debugging line
-        # print("pH:", pH)
+        DO = get_reading_from_versastar(orionstar, meas_type='DO', command=orionstar_prompt)
+        print(f'DO: {DO}')
+        try:
+            DO_list.append(DO[0])
+        except TypeError as te:
+            DO_list.append(DO)
+        # pH_list.append(pH)
+        flow_rate_list.append(flow_rate)
+    
         
         message = ""
         if message_queue and not message_queue.empty():
             message = message_queue.get()
 
-        data_entry = data_in + [formatted_time, dt, message, pH]
+        data_entry = data_in + [formatted_time, dt, message, DO, flow_rate_voltage]
         all_data.append(data_entry)
         
         times.append(mdates.date2num(current_time))
@@ -136,14 +172,23 @@ def read_and_log_thermocouples(
 
         for channel_name in plot_channel_names:
             lines[channel_name].set_data(times, thermocouple_temps[channel_name])
-        lines['pH'].set_data(times, pH_list)
-        # lines['flow_rate'].set_data(times, flow_rate_list)
+        # lines['pH'].set_data(times, pH_list)
+        lines['DO'].set_data(times, DO_list)
+        lines['flow_rate'].set_data(times, flow_rate_list)
+
+
         [axis.relim() for axis in ax]
         [axis.autoscale_view() for axis in ax]
         [axis.legend() for axis in ax]
 
         if print_output_flag:
             print(data_entry)
+
+        data_df = pd.DataFrame(all_data, columns=labels_flattened)
+        data_df.to_csv(save_to, index=False)
+
+
+        
 
     ani = FuncAnimation(fig, animate, interval=seconds_between_readings * 1000, save_count=3)
     plt.show()
@@ -185,12 +230,13 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples(thermocouple_channels=[0, 2], 
+    read_and_log_thermocouples(thermocouple_channels=[0], 
                                flow_channels=[3],
                                seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[3])
+    
     
 
     return
