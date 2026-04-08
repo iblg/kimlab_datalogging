@@ -91,5 +91,5 @@ target/
 # Ipython Notebook
 .ipynb_checkpoints
 
-# Data
+# Files
 src/kimlab_datalogging/liveplotting_data/
