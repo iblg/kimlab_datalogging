@@ -11,16 +11,6 @@ import queue
 import serial
 from orionstar_utils import get_reading_from_versastar
 
-def flowmeter_calib_2026_04_06():
-    # uses 2026_04_06 calibration of serial number 01842 McMillan 112 flowmeter
-    slope = 20.0744
-    int = 1.8462
-
-    return int, slope
-
-def convert_volts_to_flow(V):
-    int, slope = flowmeter_calib_2026_04_06()
-    return int + slope * V
 
 def set_time_interval_between_readings(interval_handle, seconds_between_readings):
     microseconds_between_readings = int(seconds_between_readings*10**6)
@@ -81,9 +71,9 @@ def read_and_log_thermocouples(
         abc, label = lu.get_read_ABC(channel_name)
         abcs.append(abc)
         labels.append(label)
-
+    # to find COM Ports in Windows: /c/Windows/System32/mode.com # to be run in terminal
     orionstar = serial.Serial(
-            port='/dev/ttyUSB0',
+            port='COM6',
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
