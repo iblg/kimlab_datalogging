@@ -2,7 +2,7 @@ from labjack import ljm
 import labjack_utils as lu
 from datetime import datetime
 import pandas as pd
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.animation import FuncAnimation
@@ -178,8 +178,6 @@ def read_and_log_thermocouples(
         data_df.to_csv(save_to, index=False)
 
 
-        
-
     ani = FuncAnimation(fig, animate, interval=seconds_between_readings * 1000, save_count=3)
     plt.show()
 
@@ -211,7 +209,14 @@ def main():
     now = datetime.now()
     now = datetime.strftime(now, '%Y_%m_%d_%H_%M_%S')
 
-    st = Path(__file__).parent / 'liveplotting_data' / now
+    # st = Path(__file__).parent / 'liveplotting_data' / now
+    # st = Path('/c/Users/uvcom/OneDrive - Yale University/')
+    # st = Path().home()
+    # st = P('~')
+    st = Path(__file__).home() / 'OneDrive - Yale University'
+    print(st)
+    st = st / 'kimlab' / 'vuv' / 'datalogging' / now
+
     print(f'Saving to {st}')
     st = st.with_suffix('.csv')
 
