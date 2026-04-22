@@ -23,7 +23,7 @@ def create_axes(temp_unit, flow_unit, DO_unit):
     ax[-1].set_xlabel('Time')
     ax[0].set_ylabel(f'Temperature ({temp_unit})')
     ax[1].set_ylabel(f'Flow rate ({flow_unit})')
-    ax[2].set_ylabel(f'pH ({DO_unit})') #### CURRENTLY ASSUMES IN MG/L
+    ax[2].set_ylabel(f'DO ({DO_unit})') #### CURRENTLY ASSUMES IN MG/L
     ax[2].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     return fig, ax
 
@@ -73,7 +73,7 @@ def read_and_log_thermocouples(
         labels.append(label)
     # to find COM Ports in Windows: /c/Windows/System32/mode.com # to be run in terminal
     orionstar = serial.Serial(
-            port='COM6',
+            port='COM5',
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
@@ -133,18 +133,18 @@ def read_and_log_thermocouples(
         
 
         data_in = ljm.eReadNames(handle, len(abcs_flattened), abcs_flattened)
-        flow_rate_voltage = ljm.eReadName(handle, 'ain3')
-        flow_rate = convert_volts_to_flow(float(flow_rate_voltage))
+        # flow_rate_voltage = ljm.eReadName(handle, 'ain3')
+        # flow_rate = convert_volts_to_flow(float(flow_rate_voltage))
         temperatures = [data_in[idx] for idx in thermocouple_index]
         DO = get_reading_from_versastar(orionstar, meas_type='DO', command=orionstar_prompt)
-        print(f'DO: {DO}')
         try:
             DO_list.append(DO[0])
         except TypeError as te:
             DO_list.append(DO)
         # pH_list.append(pH)
-        flow_rate_list.append(flow_rate)
-    
+        # flow_rate_list.append(flow_rate)
+        flow_rate_list.append(0) # temporary, while flow meter is down
+        flow_rate_voltage = 0 # temporary
         
         message = ""
         if message_queue and not message_queue.empty():
@@ -220,7 +220,7 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples(thermocouple_channels=[0], 
+    read_and_log_thermocouples(thermocouple_channels=[0, 2], 
                                flow_channels=[3],
                                seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
