@@ -2,7 +2,8 @@ from labjack import ljm
 import labjack_utils as lu
 from datetime import datetime
 import pandas as pd
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
+import shutil
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.animation import FuncAnimation
@@ -26,6 +27,14 @@ def create_axes(temp_unit, flow_unit, DO_unit):
     ax[2].set_ylabel(f'DO ({DO_unit})') #### CURRENTLY ASSUMES IN MG/L
     ax[2].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     return fig, ax
+
+
+def copy_to_onedrive(path_to_file: Path, target_dir: Path) -> None:
+    # print(filename)
+    filename = path_to_file.name
+    shutil.copy2(path_to_file, target_dir)
+
+    return
 
 
 def read_and_log_thermocouples(
@@ -222,13 +231,8 @@ def main():
     now = datetime.now()
     now = datetime.strftime(now, '%Y_%m_%d_%H_%M_%S')
 
-    # st = Path(__file__).parent / 'liveplotting_data' / now
-    # st = Path('/c/Users/uvcom/OneDrive - Yale University/')
-    # st = Path().home()
-    # st = P('~')
-    st = Path(__file__).home() / 'OneDrive - Yale University'
-    print(st)
-    st = st / 'kimlab' / 'vuv' / 'datalogging' / now
+    st = Path.home() / 'Documents' / 'datalogging'
+    st = st / now
 
     print(f'Saving to {st}')
     st = st.with_suffix('.csv')
@@ -245,9 +249,12 @@ def main():
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[3])
     
-    
+    target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
+
+    copy_to_onedrive(st, target_dir=target_dir)
 
     return
+
 
 if __name__ == '__main__':
     main()
