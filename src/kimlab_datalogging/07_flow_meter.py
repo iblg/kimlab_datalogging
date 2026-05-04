@@ -73,7 +73,7 @@ def read_and_log_thermocouples(
         labels.append(label)
     # to find COM Ports in Windows: /c/Windows/System32/mode.com # to be run in terminal
     orionstar = serial.Serial(
-            port='COM5',
+            port='COM6',
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
@@ -120,12 +120,18 @@ def read_and_log_thermocouples(
     lines['flow_rate'] = ax[1].plot([],[], '.', label='flow rate')[0]
 
     thermocouple_index = [3*i for i in range(len(thermocouple_channels))]
-    flowmeter_index = -2 # to avoid problems, the flowmeter should be attached to the labjack at the highest analog input position
+    # flowmeter_index = -2 # to avoid problems, the flowmeter should be attached to the labjack at the highest analog input position
 
     pH_list = []
     flow_rate_list = []
     DO_list = []
 
+    counterDIO = 0
+
+    ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 0)  # Enable the DIO#_EF Mode.
+    ljm.eWriteName(handle, "DIO%d_EF_INDEX" % counterDIO,  8)  # Set DIO#_EF_INDEX to 8 for Interrupt Counter.
+    # ljm.eWriteName(handle, "DAC1_FREQUENCY_OUT_ENABLE",  1)    # Enable 10 Hz square wave on DAC1.
+    ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 1)  # Enable the DIO#_EF Mode.
     def animate(i):
         current_time = datetime.now()
         formatted_time = datetime.strftime(current_time, time_format)
@@ -142,9 +148,13 @@ def read_and_log_thermocouples(
         except TypeError as te:
             DO_list.append(DO)
         # pH_list.append(pH)
-        # flow_rate_list.append(flow_rate)
-        flow_rate_list.append(0) # temporary, while flow meter is down
-        flow_rate_voltage = 0 # temporary
+        # flow_rate_list.append(flow_rate)p
+        # flow_rate_voltage = ljm.eReadName(handle, 'FIO0')
+        numRisingEdges = ljm.eReadName(handle, "DIO%d_EF_READ_A_AND_RESET" % counterDIO)
+        flow_rate_voltage = numRisingEdges
+        flow_rate_list.append(flow_rate_voltage)
+        # flow_rate_list.append(0) # temporary, while flow meter is down
+        # flow_rate_voltage = 0 # temporary
         
         message = ""
         if message_queue and not message_queue.empty():
@@ -225,7 +235,7 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples(thermocouple_channels=[0, 2], 
+    read_and_log_thermocouples(thermocouple_channels=[0], 
                                flow_channels=[3],
                                seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
