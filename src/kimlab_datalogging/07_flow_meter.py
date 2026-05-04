@@ -211,8 +211,11 @@ def read_and_log_thermocouples(
 
 def input_thread(message_queue):
     while True:
-        message = input("Enter message to log: ")
+        now = datetime.now()
+        now = datetime.strftime(now, '%H:%M:%S')
+        message = input(f"Enter message to log: ")
         message_queue.put(message)
+        print(f'\nTime: {now}, logged message \n{message}')
 
 def main():
     # help(ljm.constants)
