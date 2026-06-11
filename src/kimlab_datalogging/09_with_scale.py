@@ -20,7 +20,7 @@ def set_time_interval_between_readings(interval_handle, seconds_between_readings
     return
 
 def create_axes(temp_unit, flow_unit, DO_unit):
-    fig, ax = plt.subplots(nrows=3, sharex=True)
+    fig, ax = plt.subplots(nrows=3, sharex=False)
     # plt.title('Thermocouple Temperature Over Time')
     ax[-1].set_xlabel('Time')
     ax[0].set_ylabel(f'Temperature ({temp_unit})')
@@ -52,6 +52,8 @@ def read_weight(ser):
 
         # weight = weight.strip(b' g \r\n')
         weight = weight.split(b' g  \r\n')[0]
+        weight = weight.split(b' g')[0] # catch all beacusre some seem to have problem reading
+        weight = weight.strip()
 
 
         if weight == b'':
@@ -118,7 +120,9 @@ def read_and_log_thermocouples(
         else:
             print('No negative channel')
 
-    scale = serial.Serial(port='/dev/ttyUSB0',
+    scale = serial.Serial(
+        # port='/dev/ttyUSB0',
+        port = '/dev/ttyUSB2',
                           baudrate=9600,
                           parity=serial.PARITY_NONE,
                           bytesize=8,
@@ -132,7 +136,8 @@ def read_and_log_thermocouples(
     # to find COM ports in linux: sudo dmesg | grep tty
     orionstar = serial.Serial(
             # port='COM6',
-            port = '/dev/ttyUSB1',
+            # port = '/dev/ttyUSB1',
+            port = '/dev/ttyUSB3',
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
@@ -206,7 +211,10 @@ def read_and_log_thermocouples(
         try:
             DO_list.append(DO[0])
         except TypeError as te:
-            DO_list.append(DO)
+            # DO_list.append(DO)
+            DO_list.append(None)
+        except IndexError as ie:
+            DO_list.append(None)
         # pH_list.append(pH)
         # weight_list.append(flow_rate)p
         # flow_rate_voltage = ljm.eReadName(handle, 'FIO0')
@@ -238,6 +246,10 @@ def read_and_log_thermocouples(
             
         # print("Thermocouple temperatures:", thermocouple_temps)  # Debugging line
 
+
+
+
+        # [axis.clear() for axis in ax]
         for channel_name in plot_channel_names:
             lines[channel_name].set_data(times, thermocouple_temps[channel_name])
 
@@ -246,11 +258,31 @@ def read_and_log_thermocouples(
 
         for idx, axis in enumerate(ax):
             # print(f'Relimming axis {idx}')
-            axis.relim()
+            try:
+                axis.relim()
+            except ValueError:
+                print(f'Problem re-limiting ax[{idx}]')
+                print('\n\n\n')
+                print(f'Times shape: {len(times)}')
+                print(f'T0 shape: {len(thermocouple_temps['AIN0'])}')
+                print(f'T2 shape: {len(thermocouple_temps['AIN2'])}')
+                print(f'Times shape: {len(weight_list)}')
+                print(f'DO shape: {len(DO_list)}')
 
         # [axis.relim() for axis in ax]
-        [axis.autoscale_view() for axis in ax]
-        [axis.legend() for axis in ax]
+        for axis in ax:
+            try:
+                axis.autoscale_view()
+            except ValueError:
+                print(f'Problem auto-scaling ax[{idx}]')
+
+        for axis in ax:
+            try:
+                axis.legend()
+            except ValueError:
+                print(f'Problem making legend for ax[{idx}]')
+        # [axis.autoscale_view() for axis in ax]
+        # [axis.legend() for axis in ax]
 
         if print_output_flag:
             print(data_entry)
