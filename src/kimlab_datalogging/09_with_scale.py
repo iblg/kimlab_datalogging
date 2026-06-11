@@ -10,6 +10,7 @@ from matplotlib.animation import FuncAnimation
 import threading
 import queue
 import serial
+import numpy as np
 from orionstar_utils import get_reading_from_versastar
 
 
@@ -19,11 +20,11 @@ def set_time_interval_between_readings(interval_handle, seconds_between_readings
     return
 
 def create_axes(temp_unit, flow_unit, DO_unit):
-    fig, ax = plt.subplots(nrows=3, sharex=True)
+    fig, ax = plt.subplots(nrows=3, sharex=False)
     # plt.title('Thermocouple Temperature Over Time')
     ax[-1].set_xlabel('Time')
     ax[0].set_ylabel(f'Temperature ({temp_unit})')
-    ax[1].set_ylabel(f'Flow rate ({flow_unit})')
+    ax[1].set_ylabel(f'Weight ({flow_unit})')
     ax[2].set_ylabel(f'DO ({DO_unit})') #### CURRENTLY ASSUMES IN MG/L
     ax[2].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     return fig, ax
@@ -37,12 +38,39 @@ def copy_to_onedrive(path_to_file: Path, target_dir: Path) -> None:
     return
 
 
+def read_weight(ser):
+    while ser.in_waiting > 0:
+
+        weight = ser.read_all()
+    
+        if b'-' in weight:
+            A = -1
+            weight = weight.split(b'-')[1]
+        else:
+            A = 1
+        
+
+        # weight = weight.strip(b' g \r\n')
+        weight = weight.split(b' g  \r\n')[0]
+        weight = weight.split(b' g')[0] # catch all beacusre some seem to have problem reading
+        weight = weight.strip()
+
+
+        if weight == b'':
+            return None
+        else:
+            weight = float(weight)    
+            weight = A * weight
+            return weight
+
+
+
 def read_and_log_thermocouples(
         thermocouple_channels=[0],
         flow_channels=[3],
         tc_type: str = 'k',
         temp_unit: str = 'C',
-        flow_unit: str = 'mL/min',
+        flow_unit: str = 'g',
         DO_unit: str = 'mg/L',
         seconds_between_readings: float = 1.0,
         print_output_flag: bool = True,
@@ -64,23 +92,9 @@ def read_and_log_thermocouples(
     neg_channel_values = []
     neg_channel_registers = []
     for channel_name in channel_names:
-        print(f'Channel name: {channel_name}')
         ncv, ncr = lu.get_channel_value_register(handle, device_type, channel_name)
         neg_channel_values.append(ncv)
         neg_channel_registers.append(ncr)
-
-
-
-#         ljm.eWriteName(handle, "AIN0_NEGATIVE_CH", 1)       # AIN1 as negative channel
-# ljm.eWriteName(handle, "AIN0_RANGE", 0.1)            # ±0.1V range for thermocouple signals
-# ljm.eWriteName(handle, "AIN0_RESOLUTION_INDEX", 4)   # Higher resolution (1-12, higher = slower but more accurate)
-# ljm.eWriteName(handle, "AIN0_SETTLING_US", 0)        # Default settling time
-
-# # Set up AIN2 in differential mode (negative channel = AIN3 = channel 3)
-# ljm.eWriteName(handle, "AIN2_NEGATIVE_CH", 3)        # AIN3 as negative channel
-# ljm.eWriteName(handle, "AIN2_RANGE", 0.1)            # ±0.1V range for thermocouple signals
-# ljm.eWriteName(handle, "AIN2_RESOLUTION_INDEX", 4)
-# ljm.eWriteName(handle, "AIN2_SETTLING_US", 0)
     
     cjc_addresses = [lu.get_cjc_address(device_type, channel) for channel in thermocouple_channels]
 
@@ -91,18 +105,39 @@ def read_and_log_thermocouples(
 
     abcs, labels = [], []
     for channel_name in channel_names:
+        
+        print(f'Channel name: {channel_name}')
         abc, label = lu.get_read_ABC(channel_name)
         abcs.append(abc)
         labels.append(label)
+        ljm.eWriteName(handle, f'{channel_name}_RANGE', 0.1)
+        ljm.eWriteName(handle, f'{channel_name}_RESOLUTION_INDEX', 12)
+        ljm.eWriteName(handle, f'{channel_name}_SETTLING_US', 0)
+        if channel_name == 'AIN0':
+            ljm.eWriteName(handle, f'{channel_name}_NEGATIVE_CH', 1)
+        elif channel_name == 'AIN2':
+            ljm.eWriteName(handle, f'{channel_name}_NEGATIVE_CH', 3)
+        else:
+            print('No negative channel')
+
+    scale = serial.Serial(
+        # port='/dev/ttyUSB0',
+        port = '/dev/ttyUSB2',
+                          baudrate=9600,
+                          parity=serial.PARITY_NONE,
+                          bytesize=8,
+                          timeout=0.1
+
+                          )
+    # scale.write(b'CONTINUOUS')
+
+
     # to find COM Ports in Windows: /c/Windows/System32/mode.com # to be run in terminal
     # to find COM ports in linux: sudo dmesg | grep tty
     orionstar = serial.Serial(
-<<<<<<< HEAD
-            port='COM6',
-=======
             # port='COM6',
-            port = '/dev/ttyUSB1',
->>>>>>> fe4d05f14505e803e6908e7c28fa5b271d5f2ff6
+            # port = '/dev/ttyUSB1',
+            port = '/dev/ttyUSB3',
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
@@ -146,21 +181,22 @@ def read_and_log_thermocouples(
     lines = {channel_name: ax[0].plot([], [], '.', label=f'Thermocouple {channel_name}')[0] for channel_name in plot_channel_names}
     # lines['pH'] = ax[2].plot([],[], '.', label='pH')[0]
     lines['DO'] = ax[2].plot([],[], '.', label='DO')[0]
-    lines['flow_rate'] = ax[1].plot([],[], '.', label='flow rate')[0]
+    lines['flow_rate'] = ax[1].plot([],[], '.', label='flow rate', alpha=0.4)[0]
+    lines['flow_rate_smoothed'] = ax[1].plot([],[], '.', label='flow rate')[0]
 
     thermocouple_index = [3*i for i in range(len(thermocouple_channels))]
     # flowmeter_index = -2 # to avoid problems, the flowmeter should be attached to the labjack at the highest analog input position
 
     pH_list = []
-    flow_rate_list = []
+    weight_list = []
     DO_list = []
 
     counterDIO = 0
 
-    ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 0)  # Enable the DIO#_EF Mode.
-    ljm.eWriteName(handle, "DIO%d_EF_INDEX" % counterDIO,  8)  # Set DIO#_EF_INDEX to 8 for Interrupt Counter.
+    # ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 0)  # Enable the DIO#_EF Mode.
+    # ljm.eWriteName(handle, "DIO%d_EF_INDEX" % counterDIO,  8)  # Set DIO#_EF_INDEX to 8 for Interrupt Counter.
     # ljm.eWriteName(handle, "DAC1_FREQUENCY_OUT_ENABLE",  1)    # Enable 10 Hz square wave on DAC1.
-    ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 1)  # Enable the DIO#_EF Mode.
+    # ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 1)  # Enable the DIO#_EF Mode.
     def animate(i):
         current_time = datetime.now()
         formatted_time = datetime.strftime(current_time, time_format)
@@ -175,21 +211,32 @@ def read_and_log_thermocouples(
         try:
             DO_list.append(DO[0])
         except TypeError as te:
-            DO_list.append(DO)
+            # DO_list.append(DO)
+            DO_list.append(None)
+        except IndexError as ie:
+            DO_list.append(None)
         # pH_list.append(pH)
-        # flow_rate_list.append(flow_rate)p
+        # weight_list.append(flow_rate)p
         # flow_rate_voltage = ljm.eReadName(handle, 'FIO0')
-        numRisingEdges = ljm.eReadName(handle, "DIO%d_EF_READ_A_AND_RESET" % counterDIO)
-        flow_rate_voltage = numRisingEdges
-        flow_rate_list.append(flow_rate_voltage)
-        # flow_rate_list.append(0) # temporary, while flow meter is down
+        # numRisingEdges = ljm.eReadName(handle, "DIO%d_EF_READ_A_AND_RESET" % counterDIO)
+        # flow_rate_voltage = numRisingEdges
+
+        # weight_list.append(flow_rate_voltage)
+        weight = read_weight(scale)
+
+        if weight is None:
+            weight_list.append(None)
+            pass
+        else:
+            weight_list.append(weight)
+        # weight_list.append(0) # temporary, while flow meter is down
         # flow_rate_voltage = 0 # temporary
         
         message = ""
         if message_queue and not message_queue.empty():
             message = message_queue.get()
 
-        data_entry = data_in + [formatted_time, dt, message, DO, flow_rate_voltage]
+        data_entry = data_in + [formatted_time, dt, message, DO, weight]
         all_data.append(data_entry)
         
         times.append(mdates.date2num(current_time))
@@ -199,16 +246,43 @@ def read_and_log_thermocouples(
             
         # print("Thermocouple temperatures:", thermocouple_temps)  # Debugging line
 
+
+
+
+        # [axis.clear() for axis in ax]
         for channel_name in plot_channel_names:
             lines[channel_name].set_data(times, thermocouple_temps[channel_name])
-        # lines['pH'].set_data(times, pH_list)
+
         lines['DO'].set_data(times, DO_list)
-        lines['flow_rate'].set_data(times, flow_rate_list)
+        lines['flow_rate'].set_data(times, weight_list)
 
+        for idx, axis in enumerate(ax):
+            # print(f'Relimming axis {idx}')
+            try:
+                axis.relim()
+            except ValueError:
+                print(f'Problem re-limiting ax[{idx}]')
+                print('\n\n\n')
+                print(f'Times shape: {len(times)}')
+                print(f'T0 shape: {len(thermocouple_temps['AIN0'])}')
+                print(f'T2 shape: {len(thermocouple_temps['AIN2'])}')
+                print(f'Times shape: {len(weight_list)}')
+                print(f'DO shape: {len(DO_list)}')
 
-        [axis.relim() for axis in ax]
-        [axis.autoscale_view() for axis in ax]
-        [axis.legend() for axis in ax]
+        # [axis.relim() for axis in ax]
+        for axis in ax:
+            try:
+                axis.autoscale_view()
+            except ValueError:
+                print(f'Problem auto-scaling ax[{idx}]')
+
+        for axis in ax:
+            try:
+                axis.legend()
+            except ValueError:
+                print(f'Problem making legend for ax[{idx}]')
+        # [axis.autoscale_view() for axis in ax]
+        # [axis.legend() for axis in ax]
 
         if print_output_flag:
             print(data_entry)
@@ -262,23 +336,17 @@ def main():
     input_thread_instance.daemon = True
     input_thread_instance.start()
 
-    read_and_log_thermocouples(thermocouple_channels=[0], 
+    read_and_log_thermocouples(thermocouple_channels=[0, 2], 
                                flow_channels=[3],
                                seconds_between_readings=1, 
                                save_to=st, print_output_flag=False, 
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[3])
     
-<<<<<<< HEAD
-    target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
-
-    copy_to_onedrive(st, target_dir=target_dir)
-=======
     # COMMENTED OUT FOR LINUX CPU
     # target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
 
     # copy_to_onedrive(st, target_dir=target_dir)
->>>>>>> fe4d05f14505e803e6908e7c28fa5b271d5f2ff6
 
     return
 
