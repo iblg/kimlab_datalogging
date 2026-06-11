@@ -154,7 +154,10 @@ def read_and_log_thermocouples(
     labels_flattened.append('DO')
     labels_flattened.append('flow rate voltage')
 
-    times = []
+    # times = []
+    times_tc = {cn: [] for cn in channel_names}
+    times_DO = []
+    times_weight = []
     thermocouple_temps = {cn: [] for cn in channel_names}
     all_data = []
     time_format = "%Y/%m/%d, %H:%M:%S.%f"
@@ -197,98 +200,107 @@ def read_and_log_thermocouples(
     # ljm.eWriteName(handle, "DIO%d_EF_INDEX" % counterDIO,  8)  # Set DIO#_EF_INDEX to 8 for Interrupt Counter.
     # ljm.eWriteName(handle, "DAC1_FREQUENCY_OUT_ENABLE",  1)    # Enable 10 Hz square wave on DAC1.
     # ljm.eWriteName(handle, "DIO%d_EF_ENABLE" % counterDIO, 1)  # Enable the DIO#_EF Mode.
+    _animate_lock = threading.Lock()
     def animate(i):
-        current_time = datetime.now()
-        formatted_time = datetime.strftime(current_time, time_format)
-        dt = (current_time - start_time).total_seconds()
-        
-
-        data_in = ljm.eReadNames(handle, len(abcs_flattened), abcs_flattened)
-        # flow_rate_voltage = ljm.eReadName(handle, 'ain3')
-        # flow_rate = convert_volts_to_flow(float(flow_rate_voltage))
-        temperatures = [data_in[idx] for idx in thermocouple_index]
-        DO = get_reading_from_versastar(orionstar, meas_type='DO', command=orionstar_prompt)
+        if not _animate_lock.acquire(blocking=False):
+            return
         try:
-            DO_list.append(DO[0])
-        except TypeError as te:
-            # DO_list.append(DO)
-            DO_list.append(None)
-        except IndexError as ie:
-            DO_list.append(None)
-        # pH_list.append(pH)
-        # weight_list.append(flow_rate)p
-        # flow_rate_voltage = ljm.eReadName(handle, 'FIO0')
-        # numRisingEdges = ljm.eReadName(handle, "DIO%d_EF_READ_A_AND_RESET" % counterDIO)
-        # flow_rate_voltage = numRisingEdges
-
-        # weight_list.append(flow_rate_voltage)
-        weight = read_weight(scale)
-
-        if weight is None:
-            weight_list.append(None)
-            pass
-        else:
-            weight_list.append(weight)
-        # weight_list.append(0) # temporary, while flow meter is down
-        # flow_rate_voltage = 0 # temporary
-        
-        message = ""
-        if message_queue and not message_queue.empty():
-            message = message_queue.get()
-
-        data_entry = data_in + [formatted_time, dt, message, DO, weight]
-        all_data.append(data_entry)
-        
-        times.append(mdates.date2num(current_time))
-
-        for j, temp in enumerate(temperatures):
-            thermocouple_temps[channel_names[j]].append(temp)
-            
-        # print("Thermocouple temperatures:", thermocouple_temps)  # Debugging line
+            current_time = datetime.now()
+            formatted_time = datetime.strftime(current_time, time_format)
+            dt = (current_time - start_time).total_seconds()
 
 
-
-
-        # [axis.clear() for axis in ax]
-        for channel_name in plot_channel_names:
-            lines[channel_name].set_data(times, thermocouple_temps[channel_name])
-
-        lines['DO'].set_data(times, DO_list)
-        lines['flow_rate'].set_data(times, weight_list)
-
-        for idx, axis in enumerate(ax):
-            # print(f'Relimming axis {idx}')
+            data_in = ljm.eReadNames(handle, len(abcs_flattened), abcs_flattened)
+            # flow_rate_voltage = ljm.eReadName(handle, 'ain3')
+            # flow_rate = convert_volts_to_flow(float(flow_rate_voltage))
+            temperatures = [data_in[idx] for idx in thermocouple_index]
+            DO = get_reading_from_versastar(orionstar, meas_type='DO', command=orionstar_prompt)
             try:
-                axis.relim()
-            except ValueError:
-                print(f'Problem re-limiting ax[{idx}]')
-                print('\n\n\n')
-                print(f'Times shape: {len(times)}')
-                print(f'T0 shape: {len(thermocouple_temps['AIN0'])}')
-                print(f'T2 shape: {len(thermocouple_temps['AIN2'])}')
-                print(f'Times shape: {len(weight_list)}')
-                print(f'DO shape: {len(DO_list)}')
+                DO_list.append(DO[0])
+            except TypeError as te:
+                # DO_list.append(DO)
+                DO_list.append(None)
+            except IndexError as ie:
+                DO_list.append(None)
+            times_DO.append(mdates.date2num(current_time))
+            # pH_list.append(pH)
+            # weight_list.append(flow_rate)p
+            # flow_rate_voltage = ljm.eReadName(handle, 'FIO0')
+            # numRisingEdges = ljm.eReadName(handle, "DIO%d_EF_READ_A_AND_RESET" % counterDIO)
+            # flow_rate_voltage = numRisingEdges
 
-        # [axis.relim() for axis in ax]
-        for axis in ax:
-            try:
-                axis.autoscale_view()
-            except ValueError:
-                print(f'Problem auto-scaling ax[{idx}]')
+            # weight_list.append(flow_rate_voltage)
+            weight = read_weight(scale)
 
-        for axis in ax:
-            try:
-                axis.legend()
-            except ValueError:
-                print(f'Problem making legend for ax[{idx}]')
-        # [axis.autoscale_view() for axis in ax]
-        # [axis.legend() for axis in ax]
+            if weight is None:
+                weight_list.append(None)
+                pass
+            else:
+                weight_list.append(weight)
+            times_weight.append(mdates.date2num(current_time))
+            # weight_list.append(0) # temporary, while flow meter is down
+            # flow_rate_voltage = 0 # temporary
 
-        if print_output_flag:
-            print(data_entry)
+            message = ""
+            if message_queue and not message_queue.empty():
+                message = message_queue.get()
 
-        data_df = pd.DataFrame(all_data, columns=labels_flattened)
-        data_df.to_csv(save_to, index=False)
+            data_entry = data_in + [formatted_time, dt, message, DO, weight]
+            all_data.append(data_entry)
+
+            # times.append(mdates.date2num(current_time))
+
+            for j, temp in enumerate(temperatures):
+                cn = channel_names[j]
+                thermocouple_temps[cn].append(temp)
+                times_tc[cn].append(mdates.date2num(current_time))
+            # print("Thermocouple temperatures:", thermocouple_temps)  # Debugging line
+
+
+
+
+            # [axis.clear() for axis in ax]
+            for channel_name in plot_channel_names:
+                lines[channel_name].set_data(times_tc[channel_name], thermocouple_temps[channel_name])
+
+            lines['DO'].set_data(times_DO, DO_list)
+            lines['flow_rate'].set_data(times_weight, weight_list)
+
+            for idx, axis in enumerate(ax):
+                # print(f'Relimming axis {idx}')
+                try:
+                    axis.relim()
+                except ValueError:
+                    print(f'Problem re-limiting ax[{idx}]')
+                    print('\n\n\n')
+                    print(f'Times shape: {len(times)}')
+                    print(f'T0 shape: {len(thermocouple_temps['AIN0'])}')
+                    print(f'T2 shape: {len(thermocouple_temps['AIN2'])}')
+                    print(f'Times shape: {len(weight_list)}')
+                    print(f'DO shape: {len(DO_list)}')
+
+            # [axis.relim() for axis in ax]
+            for axis in ax:
+                try:
+                    axis.autoscale_view()
+                except ValueError:
+                    print(f'Problem auto-scaling ax[{idx}]')
+
+            for axis in ax:
+                try:
+                    axis.legend()
+                except ValueError:
+                    print(f'Problem making legend for ax[{idx}]')
+            # [axis.autoscale_view() for axis in ax]
+            # [axis.legend() for axis in ax]
+
+            if print_output_flag:
+                print(data_entry)
+
+            data_df = pd.DataFrame(all_data, columns=labels_flattened)
+            data_df.to_csv(save_to, index=False)
+        finally:
+            _animate_lock.release()
 
 
     ani = FuncAnimation(fig, animate, interval=seconds_between_readings * 1000, save_count=3)
