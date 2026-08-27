@@ -1,0 +1,5 @@
+plaintext_id,timestamp,reactor,light,
+blank,12:01:10,a,D
+s1,14:05:44,b,L
+s2,16:55:00,a,D
+s3,17:33:01,a,L
