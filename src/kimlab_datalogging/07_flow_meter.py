@@ -97,12 +97,8 @@ def read_and_log_thermocouples(
     # to find COM Ports in Windows: /c/Windows/System32/mode.com # to be run in terminal
     # to find COM ports in linux: sudo dmesg | grep tty
     orionstar = serial.Serial(
-<<<<<<< HEAD
-            port='COM6',
-=======
             # port='COM6',
             port = '/dev/ttyUSB1',
->>>>>>> fe4d05f14505e803e6908e7c28fa5b271d5f2ff6
             baudrate=9600,  # Check meter manual for 38400 if 9600 fails
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
@@ -269,16 +265,13 @@ def main():
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[3])
     
-<<<<<<< HEAD
     target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
 
     copy_to_onedrive(st, target_dir=target_dir)
-=======
     # COMMENTED OUT FOR LINUX CPU
     # target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
 
     # copy_to_onedrive(st, target_dir=target_dir)
->>>>>>> fe4d05f14505e803e6908e7c28fa5b271d5f2ff6
 
     return
 
