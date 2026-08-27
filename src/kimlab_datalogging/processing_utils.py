@@ -11,7 +11,6 @@ def get_flow_rate_at_timestamp(
         plot_flag: bool = True,
         before_flag: bool = True
     ):
-
     df = filter_at_timestamp(df, time, span, before=True) # before flag mean
     df['dt'] = df['dt'].astype('float')
     ycol = df['weight_smoothed']
@@ -19,7 +18,8 @@ def get_flow_rate_at_timestamp(
 
     if plot_flag:
         plot_param_at_timestamp(df['dt'], df['weight_smoothed'],
-                                ylabel='Mass on scale (g)', fitresult=fit_result)
+                                ylabel='Mass on scale (g)',
+                                fitresult=fit_result)
         plt.show()
         plt.close()
 
@@ -42,9 +42,13 @@ def get_DO_at_timestamp(df, time, span, plot_flag=True):
 
     return DO, d_DO
 
+def get_metadata_from_path(path: Path) -> dict:
+    md = pd.read_csv(path)
+    md = md.to_dict("list")
+    return md
 
 def process_all_from_date(date,
-                          metadata,
+                          metadata: dict|Path,
                           data_dir = Path('/Users/ianbillinge/Library/'
                                           'CloudStorage/'
                                           'OneDrive-YaleUniversity/kimlab/vuv/'
@@ -54,7 +58,19 @@ def process_all_from_date(date,
                           plot_samples_flag=True,
                           print_messages_flag=True,
                           ):
-    times = metadata['samples']
+    if isinstance(metadata, dict):
+        pass
+    elif isinstance(metadata, Path):
+        print('We\'ve got a path!')
+        metadata = get_metadata_from_path(metadata)
+        print('Heres the metadata:')
+        print(metadata)
+    else:
+        print('You passed metadata that was not a dict or path to a datasheet')
+        raise TypeError
+
+    times = metadata['timestamp']
+
     data = read_logs_from_date(data_dir, date)
 
     print(f'Data from {date}:')
@@ -91,7 +107,8 @@ def process_all_from_date(date,
     else:
         pairs = [
             get_flow_rate_at_timestamp(data, t, t_span,
-                                       plot_flag=plot_samples_flag) for t in times
+                                       plot_flag=plot_samples_flag
+                                       ) for t in times
         ]
         flow_rate, d_flow_rate = zip(*pairs)
 
@@ -107,7 +124,8 @@ def process_all_from_date(date,
     T_lamp, d_T_lamp = zip(*pairs)
 
     sample_info = pd.DataFrame(
-        {'timestamp': metadata['samples'], 'reactor': metadata['reactor'], 'light': metadata['light'],
+        {'timestamp': metadata['timestamp'], 'reactor': metadata['reactor'],
+         'light': metadata['light'],
          'DO': DO, 'd_DO': d_DO,
          'flow_rate': flow_rate, 'd_flow_rate': d_flow_rate,
          'T_outlet': T, 'd_T_outlet': d_T,
@@ -189,8 +207,12 @@ def filter_at_timestamp(df, time, span, before=False):
     return df
 
 
-def read_logs_from_date(root: Path, pattern: str, *, datetime_col_out="datetime",
-                        timestamp_candidates=("timestamp", "time")) -> pd.DataFrame:
+def read_logs_from_date(
+        root: Path,
+        pattern: str, *,
+        datetime_col_out="datetime",
+        timestamp_candidates=("timestamp", "time")) -> pd.DataFrame:
+
     files = sorted(root.rglob(f"*{pattern}*.csv"))
     if not files:
         return pd.DataFrame()
@@ -227,7 +249,8 @@ def get_weight_from_scale(df,
                           ):
 
     data = df
-    data = data.where(data[y_col].notnull(), np.nan).dropna(axis='index', how='all')
+    data = data.where(data[y_col].notnull(), np.nan).dropna(axis='index',
+                                                            how='all')
     df['t_flow_rate'] = data[t_col]
     df['weight'] = data[y_col]
 
