@@ -49,16 +49,20 @@ def process_all_from_date(date,
                                           'CloudStorage/'
                                           'OneDrive-YaleUniversity/kimlab/vuv/'
                                           'datalogging/processing'),
-                          times=None, t_span='00:05:00',
-                          save_path=None, plot_samples_flag=True,
-                          print_messages_flag=True,):
-    # data_dir = Path(__file__).parent.parent / 'from_import'
+                          t_span='00:05:00',
+                          save_path=None,
+                          plot_samples_flag=True,
+                          print_messages_flag=True,
+                          ):
     times = metadata['samples']
     data = read_logs_from_date(data_dir, date)
+
     print(f'Data from {date}:')
     print(data.info())
+
     messages = data.where(~data['message'].isna())
     messages = messages.dropna(axis='index', how='all')
+
     if print_messages_flag:
         print('\nPrinting messages:')
         with(pd.option_context('display.max_rows', None)):
@@ -73,10 +77,9 @@ def process_all_from_date(date,
     if save_path is None:
         pass
     else:
-        print('Writing to {}'.format(save_path))
-
+        print(f'Writing to {save_path}')
         data.to_csv(save_path)
-        messages_path = save_path.with_name(date + '_messages.csv')
+        messages_path = save_path.with_name(f'{date}_messages.csv')
 
         print('Writing messages to {}'.format(messages_path))
         messages.to_csv(messages_path)
