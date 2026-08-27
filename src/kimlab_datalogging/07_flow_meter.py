@@ -265,6 +265,9 @@ def main():
                                message_queue=message_queue, 
                                exclude_channels_from_plot=[3])
     
+    target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
+
+    copy_to_onedrive(st, target_dir=target_dir)
     # COMMENTED OUT FOR LINUX CPU
     # target_dir = Path().home() /'OneDrive - Yale University' / 'kimlab' / 'vuv' / 'datalogging'
 
